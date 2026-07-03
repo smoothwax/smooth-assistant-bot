@@ -1,11 +1,24 @@
-import requests
-import chromadb
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from google import genai
 from pydantic import BaseModel
+from supabase import create_client
 
-CHROMA_DIR = "./chroma_db"
-COLLECTION_NAME = "smooth_manual"
+from embeddings import embed
+
+load_dotenv()
+
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+
+CHAT_MODEL = "gemini-2.5-flash"
+
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
@@ -17,112 +30,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = chromadb.PersistentClient(path=CHROMA_DIR)
-collection = client.get_or_create_collection(COLLECTION_NAME)
-
 
 class ChatRequest(BaseModel):
     question: str
 
 
-def embed(text):
-    response = requests.post(
-        "http://localhost:11434/api/embeddings",
-        json={"model": "nomic-embed-text", "prompt": text}
-    )
-    response.raise_for_status()
-    return response.json()["embedding"]
-
-
-def ask_ollama(prompt):
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "llama3.1",
-            "prompt": prompt,
-            "stream": False
-        }
-    )
-    response.raise_for_status()
-    return response.json()["response"]
+def search_chunks(question, match_count=12):
+    query_embedding = embed(question, task_type="RETRIEVAL_QUERY")
+    result = supabase.rpc(
+        "match_smooth_chunks",
+        {"query_embedding": query_embedding, "match_count": match_count},
+    ).execute()
+    return result.data
 
 
 @app.post("/chat")
 def chat(request: ChatRequest):
-    question_embedding = embed(request.question)
-
-    # 1. Semantic/vector search
-    results = collection.query(
-        query_embeddings=[question_embedding],
-        n_results=12
-    )
-
-    semantic_chunks = results["documents"][0]
-    semantic_metas = results["metadatas"][0]
-
-    # 2. Robust keyword search across all chunks
-    all_docs = collection.get()
-
-    stop_words = {
-        "a", "an", "the", "and", "or", "but", "if", "then", "to", "of", "in",
-        "on", "for", "with", "who", "what", "when", "where", "why", "how",
-        "can", "could", "should", "would", "is", "are", "was", "were", "be",
-        "been", "being", "do", "does", "did", "get", "got", "have", "has",
-        "had", "client", "customer", "someone"
-    }
-
-    question_words = [
-        word.strip(".,?!:;()[]{}\"'").lower()
-        for word in request.question.split()
-    ]
-
-    question_words = [
-        word for word in question_words
-        if len(word) > 2 and word not in stop_words
-    ]
-
-    scored_keyword_results = []
-
-    for doc, meta in zip(all_docs["documents"], all_docs["metadatas"]):
-        doc_lower = doc.lower()
-
-        score = 0
-
-        for word in question_words:
-            if word in doc_lower:
-                score += 3
-
-        # Bonus if multiple meaningful words appear in same chunk
-        if score > 0:
-            score += len([word for word in question_words if word in doc_lower])
-
-        if score > 0:
-            scored_keyword_results.append((score, doc, meta))
-
-    scored_keyword_results.sort(reverse=True, key=lambda x: x[0])
-
-    keyword_chunks = [item[1] for item in scored_keyword_results[:12]]
-    keyword_metas = [item[2] for item in scored_keyword_results[:12]]
-
-    # 3. Combine results and remove duplicates
-    chunks = []
-    metadatas = []
-    seen = set()
-
-    for chunk, meta in zip(
-        semantic_chunks + keyword_chunks,
-        semantic_metas + keyword_metas
-    ):
-        unique_id = f"{meta['source']}_{meta['chunk']}"
-
-        if unique_id not in seen:
-            chunks.append(chunk)
-            metadatas.append(meta)
-            seen.add(unique_id)
+    chunks = search_chunks(request.question)
 
     context = "\n\n".join(
-        f"Source: {meta['source']}, chunk {meta['chunk']}\n{chunk}"
-        for chunk, meta in zip(chunks, metadatas)
+        f"Section: {chunk['section']}\n{chunk['content']}" for chunk in chunks
     )
 
     prompt = f"""
@@ -130,13 +57,13 @@ You are Smooth Assistant, an internal staff helper for Smooth Wax Bar.
 
 Your audience is receptionists and waxologists who need quick, practical answers while working.
 
-You have access to Smooth Wax Bar internal manual information and public website information.
+You have access to Smooth Wax Bar's internal knowledge base, combining reception manual and public website information.
 
 Answer rules:
 - Answer in plain English.
 - Be clear, direct, and useful.
-- Do NOT mention chunks, source numbers, embeddings, retrieval, excerpts, or technical details.
-- Do NOT say "according to chunk" or "according to the manual."
+- Do NOT mention chunks, sections, embeddings, retrieval, excerpts, or technical details.
+- Do NOT say "according to the manual" or reference how the information was retrieved.
 - If a price is available in the provided information, give the price directly.
 - Do NOT overcomplicate price answers with memberships, discounts, packs, or exceptions unless the staff member specifically asks about those.
 - If there are multiple relevant prices, list them clearly.
@@ -145,7 +72,7 @@ Answer rules:
 - Do not use outside knowledge.
 - Do not guess.
 - If the answer is not found in the Smooth information below, say:
-I don’t see this in the Smooth information. Please ask a manager.
+I don't see this in the Smooth information. Please ask a manager.
 
 Smooth information:
 {context}
@@ -156,29 +83,12 @@ Staff question:
 Give the best staff-facing answer:
 """
 
-    answer = ask_ollama(prompt)
+    response = gemini_client.models.generate_content(
+        model=CHAT_MODEL,
+        contents=prompt,
+    )
 
     return {
-        "answer": answer,
-        "sources": metadatas
-    }
-
-# De-bugging
-@app.get("/debug-search")
-def debug_search(q: str):
-    all_docs = collection.get()
-
-    matches = []
-
-    for doc, meta in zip(all_docs["documents"], all_docs["metadatas"]):
-        if q.lower() in doc.lower():
-            matches.append({
-                "metadata": meta,
-                "text": doc[:1000]
-            })
-
-    return {
-        "query": q,
-        "number_of_matches": len(matches),
-        "matches": matches[:10]
+        "answer": response.text,
+        "sources": [chunk["section"] for chunk in chunks],
     }
