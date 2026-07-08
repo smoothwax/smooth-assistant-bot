@@ -6,6 +6,31 @@ Do NOT put login credentials, passwords, or anything private/sensitive in this f
 
 ---
 
+## How to Update the Smooth Assistant
+
+The Smooth Assistant gets its information from a single file on GitHub. Anyone with access to the GitHub repository can update it — no coding required.
+
+**To update the chatbot's knowledge:**
+1. Go to github.com and sign in
+2. Go to "Repositories" and open "smooth-assistant-bot"
+3. Open the "data" folder
+4. Open the "smooth-knowledge-base.md" file
+5. Click the pencil icon (Edit) in the top right corner
+6. Make your changes — update prices, add new policies, correct anything outdated
+7. Scroll down and click "Commit changes"
+8. The chatbot will automatically update within about one minute
+
+**Tips for editing:**
+- Each section starts with "##" followed by a heading — keep that format when adding new sections
+- You can edit existing text anywhere in the file
+- Do NOT add passwords, login credentials, or any sensitive private information — this file feeds directly into the chatbot and could be surfaced back to staff
+- If you're unsure what changed after a minute, just ask the chatbot — it will reflect your updates
+
+**Who to contact for technical issues:**
+- If the chatbot stops working or something seems wrong, contact whoever set up the system
+
+---
+
 ## About Smooth Wax Bar
 
 Smooth Wax Bar is a waxing salon with locations in London, Ontario and Toronto (Liberty Village). It is dedicated to waxing services, including Brazilians, backs, brows, toes, and everything in between. Smooth uses luxury imported waxes and trained Waxologists. The brand promise is fast, hygienic, virtually ouch-free waxing at a fair price.
