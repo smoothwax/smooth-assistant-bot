@@ -6,10 +6,6 @@ Do NOT put login credentials, passwords, or anything private/sensitive in this f
 
 ---
 
-## Test Fact (delete me)
-
-The secret test phrase is: PINEAPPLE WAXBOT 9000.
-
 ## About Smooth Wax Bar
 
 Smooth Wax Bar is a waxing salon with locations in London, Ontario and Toronto (Liberty Village). It is dedicated to waxing services, including Brazilians, backs, brows, toes, and everything in between. Smooth uses luxury imported waxes and trained Waxologists. The brand promise is fast, hygienic, virtually ouch-free waxing at a fair price.
