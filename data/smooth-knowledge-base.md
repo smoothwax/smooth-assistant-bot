@@ -482,3 +482,4 @@ Cash tips go in the containers at the front desk and are paid out per the Tip Ou
 **Missed spot or asymmetry after a wax:** Contact Smooth within 48 hours and they'll get the client back in to fix it.
 
 **Why does it smell so good?** A combination of the wax used and product testers in the space.
+
