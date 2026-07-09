@@ -3,7 +3,7 @@
 This is the single source of truth for the Smooth Assistant chatbot. Edit this file directly to update what the assistant knows — add, remove, or correct anything below. Use clear headings; the assistant reads this in chunks split by section.
 
 Do NOT put login credentials, passwords, or anything private/sensitive in this file — it gets embedded and can be surfaced back to staff through the chatbot.
-
+ 
 ---
 
 ## How to Update the Smooth Assistant
